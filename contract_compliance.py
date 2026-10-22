@@ -15,7 +15,25 @@ logging.basicConfig(level =logging.WARNING)
 def clean_response(text:str) -> str:
     """Strip <thinking>...</thinking> tags from Nova model outputs."""
     return re.sub(r"<thinking>.*?</thinking>\s*","",str(text),flags= re.DOTALL).strip()
-
+def run_agent_with_retry(agent_builder, prompt:str, max_retries :int=3) -> float:
+    """
+    Run an agent with retry logic for transient Bedrock errors.
+    Uses exponential backoff (1s, 2s,4s)to handle throatting
+    """
+    for attempt in range(max_retries):
+        try:
+            agent=agent_builder()
+            t= time.time()
+            agent(prompt)
+            return time.time() 
+        except Exception  as e:
+            if attempt <max_retries -1:
+                wait =2 ** attempt
+                print(f"[Retry {attempt +1} /{max_retries}] {e.__class__.name__},waiting{wait}s...")
+                time.sleep(wait)
+            else:
+                print(f"[Failed]{e.__class__.__name__} after{max_retries}attempts")
+                raise
 
 AWS_REGION = os.environ.get("AWS_REGION","us-east-1")
 NOVA_LITE_MODEL = os.environ.get("NOVA_LITE_MODEL","amazon.nova-lite-v1:0")
